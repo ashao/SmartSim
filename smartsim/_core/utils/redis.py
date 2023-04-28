@@ -28,8 +28,8 @@ import logging
 import time
 
 import redis
-from rediscluster import RedisCluster
-from rediscluster.exceptions import ClusterDownError, RedisClusterException
+from redis.cluster import RedisCluster
+from redis.exceptions import ClusterDownError, RedisClusterException
 from smartredis import Client
 from smartredis.error import RedisReplyError
 
