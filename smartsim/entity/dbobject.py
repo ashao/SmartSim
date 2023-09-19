@@ -221,7 +221,7 @@ class DBModel(DBObject):
         :type model: str, optional
         :param model_file: serialized model
         :type model_file: file path to model, optional
-        :param backend: name of the backend (TORCH, TF, TFLITE, ONNX)
+        :param backend: name of the backend (TORCH, TF, ONNX)
         :type backend: str
         :param device: name of device for execution, defaults to "CPU"
         :type device: str, optional
@@ -242,6 +242,7 @@ class DBModel(DBObject):
         """
         super().__init__(name, model, model_file, device, devices_per_node)
         self.backend = self._check_backend(backend)
+        self._error_if_tf_multigpu(backend, device, devices_per_node)
         if not model and not model_file:
             raise ValueError("Either model or model_file must be provided")
         self.batch_size = batch_size
@@ -278,3 +279,32 @@ class DBModel(DBObject):
         if self.outputs:
             desc_str += "Outputs: " + str(self.outputs) + "\n"
         return desc_str
+
+    def _error_if_tf_multigpu(
+            self, backend: str,
+            device: str,
+            devices_per_node: int
+        ) -> None:
+
+        """Raise an Exception if requesting multiple GPUs using TF Backend"
+
+        A RedisAI error, CUDA device not found, occurs when trying to use Tensorflow
+        with multiple GPUs. Raise an error immediately instead of waiting for Redis
+        to fail.
+
+        :param backend: name of the backend (TORCH, TF, ONNX)
+        :type backend: str
+        :param device: name of device for execution"
+        :type device: str, optional
+        :param devices_per_node: number of devices to store the model on
+        :type devices_per_node: int
+        """
+
+        if backend == "TF" and device == "GPU" and devices_per_node >1:
+            raise SSUnsupportedError(
+                (
+                    "Running a Tensorflow model with multiple GPUs per node "
+                    "is currently unsupported likely due to a downstream issue "
+                    "in RedisAI"
+                )
+            )

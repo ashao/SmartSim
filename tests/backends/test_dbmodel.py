@@ -65,7 +65,7 @@ else:
             physical_devices = tf.config.list_physical_devices('GPU')
             tf.config.set_logical_device_configuration(
                 physical_devices[0],
-                [tf.config.LogicalDeviceConfiguration(memory_limit=5_000)])
+                [tf.config.LogicalDeviceConfiguration(memory_limit=500)])
         except:
             logger.warning("Could not set TF max memory limit for GPU")
 
@@ -142,6 +142,12 @@ def save_torch_cnn(path, file_name):
     module = torch.jit.trace(n, example_forward_input)
     torch.jit.save(module, path + "/" + file_name)
 
+def reset_tf_num_gpus(num_gpus, device)
+    if num_gpus>1 and device.upper()=="GPU":
+        logger.warning("Multi-GPU with TF unsupported, setting test_num_gpus=1")
+        return 1
+    else:
+        return num_gpus
 
 @pytest.mark.skipif(not should_run_tf, reason="Test needs TF to run")
 def test_tf_db_model(fileutils, wlmutils, mlutils):
@@ -155,7 +161,7 @@ def test_tf_db_model(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -292,7 +298,7 @@ def test_db_model_ensemble(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -387,7 +393,7 @@ def test_colocated_db_model_tf(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -515,7 +521,7 @@ def test_colocated_db_model_ensemble(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -616,7 +622,7 @@ def test_colocated_db_model_ensemble_reordered(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -715,7 +721,7 @@ def test_colocated_db_model_errors(fileutils, wlmutils, mlutils):
     test_interface = wlmutils.get_test_interface()
     test_port = wlmutils.get_test_port()
     test_device = mlutils.get_test_device()
-    test_num_gpus = mlutils.get_test_num_gpus()
+    test_num_gpus = reset_tf_num_gpus(mlutils.get_test_num_gpus(), test_device)
     test_dir = fileutils.make_test_dir()
     test_script = fileutils.get_test_conf_path("run_tf_dbmodel_smartredis.py")
 
@@ -821,3 +827,28 @@ def test_inconsistent_params_db_model():
             ex.value.args[0]
             == "Cannot set devices_per_node>1 if CPU is specified under devices"
         )
+
+def test_error_if_tf_multigpu():
+    """Check that an SSUnsupported error is raised if multiGPU and TF is requested"""
+
+    expected_msg = (
+        "Running a Tensorflow model with multiple GPUs per node "
+        "is currently unsupported due to a downstream issue in "
+        "RedisAI"
+    )
+
+    # Create and save ML model to filesystem
+    model, inputs, outputs = create_tf_cnn()
+    with pytest.raises(SSUnsupportedError) as ex:
+        db_model = DBModel(
+            "cnn",
+            "TF",
+            model=model,
+            device="GPU",
+            devices_per_node=2,
+            tag="test",
+            inputs=inputs,
+            outputs=outputs,
+        )
+    assert ex.value.args[0] == expected_msg
+
