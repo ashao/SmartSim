@@ -746,7 +746,7 @@ class _PTArchive(_WebZip, _RAIBuildDependency):
     def url(self) -> str:
         if "linux" in self.os_:
             if self.device == "gpu":
-                pt_build = "cu117"
+                pt_build = "cu118"
             else:
                 pt_build = "cpu"
             # pylint: disable-next=line-too-long

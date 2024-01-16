@@ -198,10 +198,10 @@ class RedisAIVersion(Version_):
             "skl2onnx": "1.16.0",
             "onnxmltools": "1.12.0",
             "scikit-learn": "1.3.2",
-            "torch": "2.0.1",
+            "torch": "2.1.2",
             "torch_cpu_suffix": "+cpu",
-            "torch_cuda_suffix": "+cu117",
-            "torchvision": "0.15.2",
+            "torch_cuda_suffix": "+cu118",
+            "torchvision": "0.16",
         },
     }
 
