@@ -356,7 +356,10 @@ class Orchestrator(EntityList[DBNode]):
         :return: True if database is active, False otherwise
         :rtype: bool
         """
-        if not self._hosts:
+        if not all([dbnode.check_files_exist() for dbnode in self.entities]):
+            return False
+
+        if not self.hosts:
             return False
 
         return db_is_active(self._hosts, self.ports, self.num_shards)

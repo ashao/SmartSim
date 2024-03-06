@@ -183,6 +183,19 @@ class DBNode(SmartSimEntity):
         with fileinput.FileInput(file_paths) as ifstream:
             return cls._parse_launched_shard_info_from_iterable(ifstream, num_shards)
 
+
+    def check_files_exist(self) -> bool:
+        """
+        Checks to see if the files associated with this dbnode exist
+
+        :return: True if Orchestrator files exist
+        :rtype: bool
+        """
+
+        output_files = [osp.join(self.path, file) for file in self._output_files]
+        return all([osp.exists(file) for file in output_files])
+
+
     def get_launched_shard_info(self) -> "t.List[LaunchedShardData]":
         """Parse the launched database shard info from the output files
 

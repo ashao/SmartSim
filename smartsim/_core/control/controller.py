@@ -773,7 +773,6 @@ class Controller:
         ready = False
         while not ready:
             try:
-                time.sleep(CONFIG.jm_interval)
                 # manually trigger job update if JM not running
                 if not self._jobs.actively_monitoring:
                     self._jobs.check_jobs()
@@ -791,6 +790,7 @@ class Controller:
                     raise SmartSimError(msg)
                 else:
                     logger.debug("Waiting for orchestrator instances to spin up...")
+                    time.sleep(CONFIG.jm_interval)
             except KeyboardInterrupt:
                 logger.info("Orchestrator launch cancelled - requesting to stop")
                 self.stop_db(orchestrator)
