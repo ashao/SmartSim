@@ -59,3 +59,6 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86
 
  # Build ML Backends
  RUN smart build --device=gpu --onnx
+
+ # Correct permissions for RedisAI
+RUN find /usr/local/lib/python3.10/dist-packages/smartsim -name "*.so*" -exec chmod a+rx {} \;

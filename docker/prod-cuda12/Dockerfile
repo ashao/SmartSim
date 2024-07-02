@@ -62,3 +62,6 @@ RUN pip install tensorflow==2.15.0
 
 # Build ML Backends
 RUN smart build --device=cuda121
+
+ # Correct permissions for RedisAI
+RUN find /usr/local/lib/python3.10/dist-packages/smartsim -name "*.so*" -exec chmod a+rx {} \;
