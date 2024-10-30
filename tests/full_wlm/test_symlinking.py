@@ -41,7 +41,9 @@ def test_batch_model_and_ensemble(test_dir, wlmutils):
     launcher = wlmutils.get_test_launcher()
     exp = Experiment(exp_name, launcher=launcher, exp_path=test_dir)
     rs = exp.create_run_settings("echo", ["spam", "eggs"])
-    bs = exp.create_batch_settings()
+    rs.set_nodes(1)
+    rs.set_tasks(1)
+    bs = exp.create_batch_settings(nodes=1)
 
     test_model = exp.create_model(
         "test_model", path=test_dir, run_settings=rs, batch_settings=bs
@@ -87,7 +89,9 @@ def test_batch_ensemble_symlinks(test_dir, wlmutils):
     launcher = wlmutils.get_test_launcher()
     exp = Experiment(exp_name, launcher=launcher, exp_path=test_dir)
     rs = exp.create_run_settings("echo", ["spam", "eggs"])
-    bs = exp.create_batch_settings()
+    rs.set_nodes(1)
+    rs.set_tasks(1)
+    bs = exp.create_batch_settings(nodes=1)
     test_ensemble = exp.create_ensemble(
         "test_ensemble", params={}, batch_settings=bs, run_settings=rs, replicas=3
     )
@@ -120,7 +124,9 @@ def test_batch_model_symlinks(test_dir, wlmutils):
     launcher = wlmutils.get_test_launcher()
     exp = Experiment(exp_name, launcher=launcher, exp_path=test_dir)
     rs = exp.create_run_settings("echo", ["spam", "eggs"])
-    bs = exp.create_batch_settings()
+    rs.set_nodes(1)
+    rs.set_tasks(1)
+    bs = exp.create_batch_settings(nodes=1)
     test_model = exp.create_model(
         "test_model", path=test_dir, run_settings=rs, batch_settings=bs
     )
