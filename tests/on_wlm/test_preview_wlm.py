@@ -44,7 +44,7 @@ on_wlm = (pytest.test_launcher in pytest.wlm_options,)
 @pytest.fixture
 def choose_host():
     def _choose_host(wlmutils, index: int = 0):
-        hosts = wlmutils.get_test_hostlist()
+        hosts = wlmutils.get_available_hosts()
         if hosts:
             return hosts[index]
         return None
@@ -83,7 +83,7 @@ def test_preview_wlm_run_commands_cluster_orc_model(
         batch=False,
         interface=network_interface,
         single_cmd=True,
-        hosts=wlmutils.get_test_hostlist(),
+        hosts=wlmutils.get_available_hosts(),
         db_identifier="testdb_reg",
     )
 

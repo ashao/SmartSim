@@ -48,7 +48,6 @@ def test_launch_orc_auto(test_dir, wlmutils):
         batch=False,
         interface=network_interface,
         single_cmd=False,
-        hosts=wlmutils.get_test_hostlist(),
     )
 
     exp.start(orc, block=True)
@@ -80,7 +79,6 @@ def test_launch_cluster_orc_single(test_dir, wlmutils):
         batch=False,
         interface=network_interface,
         single_cmd=True,
-        hosts=wlmutils.get_test_hostlist(),
     )
 
     exp.start(orc, block=True)
@@ -112,7 +110,6 @@ def test_launch_cluster_orc_multi(test_dir, wlmutils):
         batch=False,
         interface=network_interface,
         single_cmd=False,
-        hosts=wlmutils.get_test_hostlist(),
     )
 
     exp.start(orc, block=True)

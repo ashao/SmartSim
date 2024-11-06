@@ -51,7 +51,7 @@ pytestmark = pytest.mark.group_b
 @pytest.fixture
 def choose_host():
     def _choose_host(wlmutils, index: int = 0):
-        hosts = wlmutils.get_test_hostlist()
+        hosts = wlmutils.get_available_hosts()
         if hosts:
             return hosts[index]
         return None

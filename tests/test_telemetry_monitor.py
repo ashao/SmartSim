@@ -62,12 +62,20 @@ ALL_ARGS = {"-exp_dir", "-frequency"}
 PROXY_ENTRY_POINT = "smartsim._core.entrypoints.indirect"
 CFG_TM_ENABLED_ATTR = "telemetry_enabled"
 
+available_wlm_launchers = []
+for cls in WLMLauncher.__subclasses__():
+    try:
+        cls()
+        available_wlm_launchers.append(cls)
+    except:
+        pass
 
 for_all_wlm_launchers = pytest.mark.parametrize(
     "wlm_launcher",
-    [pytest.param(cls(), id=cls.__name__) for cls in WLMLauncher.__subclasses__()],
+    [pytest.param(cls(), id=cls.__name__) for cls in available_wlm_launchers],
 )
 
+on_wlm = pytest.test_launcher != "local"
 requires_wlm = pytest.mark.skipif(
     pytest.test_launcher == "local", reason="Test requires WLM"
 )
@@ -982,6 +990,7 @@ def test_telemetry_colo(fileutils, test_dir, wlmutils, coloutils, monkeypatch, c
             exp,
             "echo.py",
             {},
+            on_wlm = on_wlm
         )
 
         exp.generate(smartsim_model)

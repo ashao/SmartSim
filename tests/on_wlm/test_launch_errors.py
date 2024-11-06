@@ -47,6 +47,8 @@ def test_failed_status(fileutils, test_dir, wlmutils):
     settings = exp.create_run_settings(
         "python", f"{script} --time=7", run_comamnd="auto"
     )
+    settings.set_nodes(1)
+    settings.set_tasks(1)
 
     model = exp.create_model("bad-model", path=test_dir, run_settings=settings)
 

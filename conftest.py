@@ -71,7 +71,12 @@ from smartsim.settings import (
 )
 
 logger = get_logger(__name__)
-
+has_dragon = False
+try:
+    import dragon
+    has_dragon = True
+except:
+    pass
 # pylint: disable=redefined-outer-name,invalid-name,global-statement
 
 # Globals, yes, but its a testing file
@@ -90,7 +95,8 @@ mpi_app_exe = None
 built_mpi_app = False
 
 # Fill this at runtime if needed
-test_hostlist = None
+test_hosts = None
+reserved_hosts = []
 has_aprun = shutil.which("aprun") is not None
 
 def get_account() -> str:
@@ -140,7 +146,7 @@ def pytest_sessionstart(
     while not os.path.isdir(test_output_root):
         time.sleep(0.1)
 
-    if CONFIG.dragon_server_path is None:
+    if has_dragon and CONFIG.dragon_server_path is None:
         dragon_server_path =  os.path.join(test_output_root, "dragon_server")
         os.makedirs(dragon_server_path)
         os.environ["SMARTSIM_DRAGON_SERVER_PATH"] = dragon_server_path
@@ -228,33 +234,35 @@ def kill_all_test_spawned_processes() -> None:
 
 
 
-def get_hostlist() -> t.Optional[t.List[str]]:
-    global test_hostlist
-    if not test_hostlist:
-        if "PBS_NODEFILE" in os.environ and test_launcher == "pals":
-            # with PALS, we need a hostfile even if `aprun` is available
-            try:
-                return _parse_hostlist_file(os.environ["PBS_NODEFILE"])
-            except FileNotFoundError:
-                return None
-        elif "PBS_NODEFILE" in os.environ and not shutil.which("aprun"):
-            try:
-                return _parse_hostlist_file(os.environ["PBS_NODEFILE"])
-            except FileNotFoundError:
-                return None
-        elif "SLURM_JOB_NODELIST" in os.environ:
-            try:
-                nodelist = os.environ["SLURM_JOB_NODELIST"]
-                test_hostlist = run(
-                    ["scontrol", "show", "hostnames", nodelist],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                ).stdout.split()
-            except Exception:
-                return None
-    return test_hostlist
+def get_available_hosts(num_hosts=None) -> t.Optional[t.List[str]]:
+    global test_hosts
+    if "PBS_NODEFILE" in os.environ and test_launcher == "pals":
+        # with PALS, we need a hostfile even if `aprun` is available
+        try:
+            test_alloc_hosts = _parse_hostlist_file(os.environ["PBS_NODEFILE"])
+        except FileNotFoundError:
+            return None
+    elif "PBS_NODEFILE" in os.environ and not shutil.which("aprun"):
+        try:
+            test_alloc_hosts =_parse_hostlist_file(os.environ["PBS_NODEFILE"])
+        except FileNotFoundError:
+            return None
+    elif "SLURM_JOB_NODELIST" in os.environ:
+        nodelist = os.environ["SLURM_JOB_NODELIST"]
+        test_alloc_hosts = run(
+            ["scontrol", "show", "hostnames", nodelist],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.split()
+    else:
+        return None
 
+    test_hosts = [host for host in test_alloc_hosts if host not in reserved_hosts]
+    if num_hosts and len(test_hosts)<num_hosts:
+        raise Exception("Insufficent available hosts to fulfill requests")
+
+    return test_hosts
 
 def _parse_hostlist_file(path: str) -> t.List[str]:
     with open(path, "r", encoding="utf-8") as nodefile:
@@ -344,8 +352,8 @@ class WLMUtils:
         return test_nic
 
     @staticmethod
-    def get_test_hostlist() -> t.Optional[t.List[str]]:
-        return get_hostlist()
+    def get_available_hosts(num_hosts=None) -> t.Optional[t.List[str]]:
+        return get_available_hosts(num_hosts)
 
     @staticmethod
     def get_batch_resources() -> t.Dict:
@@ -442,7 +450,7 @@ class WLMUtils:
     @staticmethod
     def choose_host(rs: RunSettings) -> t.Optional[str]:
         if isinstance(rs, (MpirunSettings, MpiexecSettings)):
-            hl = get_hostlist()
+            hl = get_available_hosts()
             if hl is not None:
                 return hl[0]
 
@@ -895,17 +903,6 @@ def wlm_experiment(test_dir: str, wlmutils: WLMUtils) -> smartsim.Experiment:
         launcher=wlmutils.get_test_launcher()
     )
 
-def _cleanup_db(name: str) -> None:
-    global database_registry
-    db = database_registry[name]
-    if db and db.is_active():
-        exp = Experiment("cleanup")
-        try:
-            db = exp.reconnect_orchestrator(db.checkpoint_file)
-            exp.stop(db)
-        except:
-            pass
-
 @dataclass
 class DBConfiguration:
     name: str
@@ -914,6 +911,22 @@ class DBConfiguration:
     interface: t.Union[str,t.List[str]]
     hostlist: t.Optional[t.List[str]]
     port: int
+
+    def cleanup(self):
+        global database_registry, reserved_hosts
+        db = database_registry[self.name]
+        if db and db.is_active():
+            exp = Experiment("cleanup")
+            try:
+                db = exp.reconnect_orchestrator(db.checkpoint_file)
+                exp.stop(db)
+            except:
+                pass
+        if self.hostlist:
+            hosts = [self.hostlist] if isinstance(self.hostlist, str) else self.hostlist
+            [reserved_hosts.remove(host) for host in hosts if host in reserved_hosts]
+
+
 
 @dataclass
 class PrepareDatabaseOutput:
@@ -933,40 +946,39 @@ def local_db() -> t.Generator[DBConfiguration, None, None]:
         _find_free_port(tuple(reversed(test_ports))),
     )
     yield config
-    _cleanup_db(name)
+    config.cleanup()
 
 @pytest.fixture(scope="session")
 def single_db(wlmutils: WLMUtils) -> t.Generator[DBConfiguration, None, None]:
-    hostlist = wlmutils.get_test_hostlist()
-    hostlist = hostlist[-1:] if hostlist is not None else None
     name = "single_db_fixture"
+    host = wlmutils.get_available_hosts(1)
     config = DBConfiguration(
         name,
         wlmutils.get_test_launcher(),
         1,
         wlmutils.get_test_interface(),
-        hostlist,
+        host,
         _find_free_port(tuple(reversed(test_ports)))
     )
     yield config
-    _cleanup_db(name)
+    config.cleanup()
 
 
 @pytest.fixture(scope="session")
 def clustered_db(wlmutils: WLMUtils) -> t.Generator[DBConfiguration, None, None]:
-    hostlist = wlmutils.get_test_hostlist()
-    hostlist = hostlist[-4:-1] if hostlist is not None else None
+    num_nodes = 3
+    hosts = wlmutils.get_available_hosts(num_nodes)
     name = "clustered_db_fixture"
     config = DBConfiguration(
         name,
         wlmutils.get_test_launcher(),
-        3,
+        num_nodes,
         wlmutils.get_test_interface(),
-        hostlist,
+        hosts,
         _find_free_port(tuple(reversed(test_ports))),
     )
     yield config
-    _cleanup_db(name)
+    config.cleanup()
 
 
 @pytest.fixture
@@ -992,6 +1004,11 @@ def register_new_db() -> t.Callable[[DBConfiguration], Orchestrator]:
         exp.start(orc)
         global database_registry
         database_registry[config.name] = orc
+
+        if config.hostlist:
+            hosts = [config.hostlist] if isinstance(config.hostlist, str) else config.hostlist
+            [reserved_hosts.append(host) for host in hosts if host not in reserved_hosts]
+
         return orc
     return _register_new_db
 
@@ -1022,3 +1039,9 @@ def prepare_db(
 
         return PrepareDatabaseOutput(db, new_db)
     return _prepare_db
+
+@pytest.fixture(scope="function")
+def retrieve_db() -> t.Callable[[DBConfiguration],Orchestrator]:
+    def _retrieve_db(config: DBConfiguration) -> Orchestrator:
+        return database_registry[config.name]
+    return _retrieve_db

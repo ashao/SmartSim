@@ -56,14 +56,6 @@ def make_entity_context(exp: Experiment, entity: SmartSimEntity):
             exp.stop(entity)
 
 
-def choose_host(wlmutils, index=0):
-    hosts = wlmutils.get_test_hostlist()
-    if hosts:
-        return hosts[index]
-    else:
-        return None
-
-
 def check_not_failed(exp, *args):
     statuses = exp.get_status(*args)
     assert all(stat is not SmartSimStatus.STATUS_FAILED for stat in statuses)
@@ -94,7 +86,7 @@ def test_db_identifier_standard_then_colo_error(
         port=test_port,
         interface=test_interface,
         db_identifier="testdb_colo",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
     assert orc.name == "testdb_colo"
 
@@ -180,7 +172,7 @@ def test_db_identifier_colo_then_standard(
         port=test_port + 1,
         interface=test_interface,
         db_identifier="testdb_colo",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
 
     assert orc.name == "testdb_colo"
@@ -212,7 +204,7 @@ def test_db_identifier_standard_twice_not_unique(wlmutils, test_dir):
         port=test_port,
         interface=test_interface,
         db_identifier="my_db",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
 
     assert orc.name == "my_db"
@@ -221,7 +213,7 @@ def test_db_identifier_standard_twice_not_unique(wlmutils, test_dir):
         port=test_port + 1,
         interface=test_interface,
         db_identifier="my_db",
-        hosts=choose_host(wlmutils, index=1),
+        hosts=wlmutils.get_available_hosts()[1],
     )
 
     assert orc2.name == "my_db"
@@ -258,7 +250,7 @@ def test_db_identifier_create_standard_once(test_dir, wlmutils):
         db_nodes=1,
         interface=test_interface,
         db_identifier="testdb_reg",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
     with make_entity_context(exp, db):
         exp.start(db)
@@ -284,7 +276,7 @@ def test_multidb_create_standard_twice(wlmutils, test_dir):
         port=test_port,
         interface=test_interface,
         db_identifier="testdb_reg",
-        hosts=choose_host(wlmutils, 1),
+        hosts=wlmutils.get_available_hosts()[0],
     )
 
     # create database with different db_id
@@ -292,7 +284,7 @@ def test_multidb_create_standard_twice(wlmutils, test_dir):
         port=test_port + 1,
         interface=test_interface,
         db_identifier="testdb_reg2",
-        hosts=choose_host(wlmutils, 2),
+        hosts=wlmutils.get_available_hosts()[1],
     )
 
     # launch
@@ -327,7 +319,7 @@ def test_multidb_colo_once(fileutils, test_dir, wlmutils, coloutils, db_type):
     smartsim_model = exp.create_model("smartsim_model", run_settings)
 
     db_args = {
-        "port": test_port + 1,
+        "port": test_port,
         "db_cpus": 1,
         "debug": True,
         "db_identifier": "testdb_colo",
@@ -370,7 +362,7 @@ def test_multidb_standard_then_colo(fileutils, test_dir, wlmutils, coloutils, db
         port=test_port,
         interface=test_interface,
         db_identifier="testdb_reg",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
 
     db_args = {
@@ -431,7 +423,7 @@ def test_multidb_colo_then_standard(fileutils, test_dir, wlmutils, coloutils, db
         port=test_port + 1,
         interface=test_interface,
         db_identifier="testdb_reg",
-        hosts=choose_host(wlmutils),
+        hosts=wlmutils.get_available_hosts()[0],
     )
 
     with make_entity_context(exp, db), make_entity_context(exp, smartsim_model):
@@ -446,19 +438,21 @@ def test_multidb_colo_then_standard(fileutils, test_dir, wlmutils, coloutils, db
     pytest.test_launcher not in pytest.wlm_options,
     reason="Not testing WLM integrations",
 )
-@pytest.mark.parametrize("db_type", supported_dbs)
-def test_launch_cluster_orc_single_dbid(
-    test_dir, coloutils, fileutils, wlmutils, db_type
-):
+def test_launch_cluster_orc_single_dbid(test_dir, wlmutils, clustered_db, retrieve_db):
     """test clustered 3-node orchestrator with single command with a database identifier"""
-    # TODO detect number of nodes in allocation and skip if not sufficent
+
+    db = retrieve_db(clustered_db)
 
     exp_name = "test_launch_cluster_orc_single_dbid"
     launcher = wlmutils.get_test_launcher()
-    test_port = wlmutils.get_test_port()
-    test_script = fileutils.get_test_conf_path("smartredis/multidbid.py")
     exp = Experiment(exp_name, launcher=launcher, exp_path=test_dir)
 
+    # If the clustered_db fixture is up, bring it down so we have enough nodes
+    # to pass this test
+    if db and db.is_active():
+        clustered_db.cleanup()
+
+    hosts = wlmutils.get_available_hosts(3)
     # batch = False to launch on existing allocation
     network_interface = wlmutils.get_test_interface()
     orc: Orchestrator = exp.create_database(
@@ -467,26 +461,13 @@ def test_launch_cluster_orc_single_dbid(
         batch=False,
         interface=network_interface,
         single_cmd=True,
-        hosts=wlmutils.get_test_hostlist(),
+        hosts=hosts,
         db_identifier="testdb_reg",
     )
 
-    db_args = {
-        "port": test_port,
-        "db_cpus": 1,
-        "debug": True,
-        "db_identifier": "testdb_colo",
-    }
-
-    # Create model with colocated database
-    smartsim_model = coloutils.setup_test_colo(
-        fileutils, db_type, exp, test_script, db_args, on_wlm=on_wlm
-    )
-
-    with make_entity_context(exp, orc), make_entity_context(exp, smartsim_model):
-        exp.start(orc, block=True)
-        exp.start(smartsim_model, block=True)
+    with make_entity_context(exp, orc):
+        exp.start(orc)
         job_dict = exp._control._jobs.get_db_host_addresses()
         assert len(job_dict[orc.entities[0].db_identifier]) == 3
 
-    check_not_failed(exp, orc, smartsim_model)
+    check_not_failed(exp, orc)

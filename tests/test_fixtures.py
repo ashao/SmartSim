@@ -24,6 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import os
+import socket
 
 import psutil
 import pytest
@@ -54,3 +55,10 @@ def test_create_new_db_fixture_if_stopped(local_experiment, local_db, prepare_db
     assert output.new_db
     local_experiment.reconnect_orchestrator(output.orchestrator.checkpoint_file)
     assert output.orchestrator.is_active()
+
+def test_clustered_db(wlmutils, wlm_experiment, prepare_db, clustered_db):
+
+    db = prepare_db(clustered_db).orchestrator
+    wlm_experiment.reconnect_orchestrator(db.checkpoint_file)
+    hosts = wlmutils.get_available_hosts()
+    print(hosts)

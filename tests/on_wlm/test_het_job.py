@@ -74,7 +74,7 @@ def test_orch_single_cmd(monkeypatch, wlmutils, test_dir):
         batch=False,
         interface=wlmutils.get_test_interface(),
         single_cmd=True,
-        hosts=wlmutils.get_test_hostlist(),
+        hosts=wlmutils.get_available_hosts(),
     )
 
     for node in orc:
